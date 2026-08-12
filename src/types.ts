@@ -9,6 +9,11 @@ export interface Env {
 	AI: Ai;
 
 	/**
+	 * Binding for Cloudflare AI Search.
+	 */
+	AI_SEARCH: AiSearchNamespace;
+
+	/**
 	 * Binding for static assets.
 	 */
 	ASSETS: { fetch: (request: Request) => Promise<Response> };
