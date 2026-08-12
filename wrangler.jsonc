@@ -1,12 +1,8 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "saratam1",
 	"main": "src/index.ts",
-	"compatibility_date": "2025-10-08",
+	"compatibility_date": "2026-08-12",
 	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 	"assets": {
 		"binding": "ASSETS",
@@ -18,5 +14,12 @@
 	"ai": {
 		"binding": "AI"
 	},
+	"ai_search_namespaces": [
+		{
+			"binding": "AI_SEARCH",
+			"namespace": "default",
+			"remote": true
+		}
+	],
 	"upload_source_maps": true
 }
