@@ -9,6 +9,8 @@ import { Env, ChatMessage } from "./types";
 const MODEL_ID = "@cf/meta/llama-3.1-8b-instruct-fp8";
 const AI_SEARCH_INSTANCE = "saratam-knowledge";
 
+const ALLOWED_ORIGIN = "https://saratamdigiplex.pages.dev";
+
 const SYSTEM_PROMPT = `
 You are the official AI assistant of Saratam Digiplex.
 
@@ -36,6 +38,27 @@ export default {
 	): Promise<Response> {
 		const url = new URL(request.url);
 
+		/*
+		 * Handle CORS preflight requests.
+		 *
+		 * Your website is hosted at:
+		 * https://saratamdigiplex.pages.dev
+		 *
+		 * Because the website and Worker are on different origins,
+		 * the browser sends an OPTIONS request before the POST request.
+		 */
+		if (request.method === "OPTIONS") {
+			return new Response(null, {
+				status: 204,
+				headers: {
+					"Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+					"Access-Control-Allow-Methods": "POST, OPTIONS",
+					"Access-Control-Allow-Headers": "Content-Type",
+					"Access-Control-Max-Age": "86400",
+				},
+			});
+		}
+
 		// Serve website files
 		if (url.pathname === "/" || !url.pathname.startsWith("/api/")) {
 			return env.ASSETS.fetch(request);
@@ -49,11 +72,17 @@ export default {
 
 			return new Response("Method not allowed", {
 				status: 405,
+				headers: {
+					"Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+				},
 			});
 		}
 
 		return new Response("Not found", {
 			status: 404,
+			headers: {
+				"Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+			},
 		});
 	},
 } satisfies ExportedHandler<Env>;
@@ -81,16 +110,21 @@ async function handleChatRequest(
 					status: 400,
 					headers: {
 						"content-type": "application/json",
+						"Access-Control-Allow-Origin": ALLOWED_ORIGIN,
 					},
 				},
 			);
 		}
 
-		// Get Saratam Digiplex AI Search instance
+		/*
+		 * Get Saratam Digiplex AI Search instance.
+		 */
 		const searchInstance =
 			env.AI_SEARCH.get(AI_SEARCH_INSTANCE);
 
-		// Search the knowledge base
+		/*
+		 * Search the Saratam Digiplex knowledge base.
+		 */
 		const searchResults = await searchInstance.search({
 			messages: [
 				{
@@ -100,7 +134,9 @@ async function handleChatRequest(
 			],
 		});
 
-		// Extract retrieved text from AI Search
+		/*
+		 * Extract retrieved text from AI Search.
+		 */
 		const knowledge = searchResults.chunks
 			.map(
 				(result: { text?: string }) =>
@@ -109,7 +145,9 @@ async function handleChatRequest(
 			.filter(Boolean)
 			.join("\n\n---\n\n");
 
-		// Build system message with retrieved knowledge
+		/*
+		 * Build system message with retrieved knowledge.
+		 */
 		const systemMessage = `${SYSTEM_PROMPT}
 
 Saratam Digiplex knowledge retrieved for this question:
@@ -119,7 +157,9 @@ ${knowledge || "No relevant knowledge was found."}
 Use the retrieved knowledge above when answering the visitor.
 `;
 
-		// Keep conversation history but remove any old system messages
+		/*
+		 * Keep conversation history but remove old system messages.
+		 */
 		const chatMessages: ChatMessage[] = messages.filter(
 			(message) => message.role !== "system",
 		);
@@ -129,7 +169,9 @@ Use the retrieved knowledge above when answering the visitor.
 			content: systemMessage,
 		});
 
-		// Send knowledge + conversation to Workers AI
+		/*
+		 * Send knowledge + conversation to Workers AI.
+		 */
 		const inputs = {
 			messages: chatMessages,
 			max_tokens: 1024,
@@ -143,12 +185,16 @@ Use the retrieved knowledge above when answering the visitor.
 			inputs,
 		);
 
+		/*
+		 * Return streaming response with CORS headers.
+		 */
 		return new Response(stream, {
 			headers: {
 				"content-type":
 					"text/event-stream; charset=utf-8",
 				"cache-control": "no-cache",
 				connection: "keep-alive",
+				"Access-Control-Allow-Origin": ALLOWED_ORIGIN,
 			},
 		});
 	} catch (error) {
@@ -165,6 +211,7 @@ Use the retrieved knowledge above when answering the visitor.
 				status: 500,
 				headers: {
 					"content-type": "application/json",
+					"Access-Control-Allow-Origin": ALLOWED_ORIGIN,
 				},
 			},
 		);
