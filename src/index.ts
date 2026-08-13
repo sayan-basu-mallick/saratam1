@@ -96,7 +96,7 @@ async function handleChatRequest(
 		/*
 		 * Extract relevant knowledge.
 		 */
-		const knowledge = searchResults.data
+		const knowledge = searchResults.chunks
 			.map((result: { content?: string }) => result.content || "")
 			.filter(Boolean)
 			.join("\n\n---\n\n");
