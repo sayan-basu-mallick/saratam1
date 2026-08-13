@@ -1,19 +1,14 @@
 /**
- * LLM Chat Application Template
+ * Saratam Digiplex AI Chat
  *
- * A simple chat application using Cloudflare Workers AI.
- * This template demonstrates how to implement an LLM-powered chat interface with
- * streaming responses using Server-Sent Events (SSE).
- *
- * @license MIT
+ * Cloudflare Workers AI + AI Search (RAG)
  */
+
 import { Env, ChatMessage } from "./types";
 
-// Model ID for Workers AI model
-// https://developers.cloudflare.com/workers-ai/models/
 const MODEL_ID = "@cf/meta/llama-3.1-8b-instruct-fp8";
+const AI_SEARCH_INSTANCE = "saratam-knowledge";
 
-// Default system prompt
 const SYSTEM_PROMPT = `
 You are the official AI assistant of Saratam Digiplex.
 
@@ -21,24 +16,19 @@ Your job is to help visitors understand Saratam Digiplex, its services,
 digital marketing, website development, mobile app development, Flutter,
 SEO, advertising, branding and other digital solutions.
 
-Use the Saratam Digiplex knowledge provided to you as your primary source
-for company-specific information.
-
 IMPORTANT RULES:
-- Do not invent information about Saratam Digiplex.
+- Use the knowledge provided from the Saratam Digiplex knowledge base.
+- Do not invent company information.
 - Do not invent prices, guarantees, clients, awards, statistics or policies.
-- If the knowledge does not contain the answer to a company-specific question,
-  say that you do not have that information.
+- If the knowledge base does not contain the answer to a company-specific
+  question, clearly say that you don't have that information.
 - Be professional, friendly and helpful.
 - Give simple explanations to non-technical visitors.
-- Give more technical explanations when the visitor asks for technical details.
+- Give technical explanations when the visitor asks technical questions.
 - If someone wants to start a project, encourage them to contact Saratam Digiplex.
 `;
 
 export default {
-	/**
-	 * Main request handler for the Worker
-	 */
 	async fetch(
 		request: Request,
 		env: Env,
@@ -46,59 +36,102 @@ export default {
 	): Promise<Response> {
 		const url = new URL(request.url);
 
-		// Handle static assets (frontend)
+		// Serve website files
 		if (url.pathname === "/" || !url.pathname.startsWith("/api/")) {
 			return env.ASSETS.fetch(request);
 		}
 
-		// API Routes
+		// Chat API
 		if (url.pathname === "/api/chat") {
-			// Handle POST requests for chat
 			if (request.method === "POST") {
 				return handleChatRequest(request, env);
 			}
 
-			// Method not allowed for other request types
 			return new Response("Method not allowed", { status: 405 });
 		}
 
-		// Handle 404 for unmatched routes
 		return new Response("Not found", { status: 404 });
 	},
 } satisfies ExportedHandler<Env>;
 
-/**
- * Handles chat API requests
- */
 async function handleChatRequest(
 	request: Request,
 	env: Env,
 ): Promise<Response> {
 	try {
-		// Parse JSON request body
 		const { messages = [] } = (await request.json()) as {
 			messages: ChatMessage[];
 		};
 
-		// Add system prompt if not present
-		if (!messages.some((msg) => msg.role === "system")) {
-			messages.unshift({ role: "system", content: SYSTEM_PROMPT });
+		// Find the visitor's latest question
+		const latestUserMessage = [...messages]
+			.reverse()
+			.find((message) => message.role === "user");
+
+		if (!latestUserMessage) {
+			return new Response(
+				JSON.stringify({ error: "No user message provided" }),
+				{
+					status: 400,
+					headers: { "content-type": "application/json" },
+				},
+			);
 		}
 
+		/*
+		 * Search Saratam Digiplex knowledge base.
+		 */
+		const searchInstance =
+			env.AI_SEARCH.get(AI_SEARCH_INSTANCE);
+
+		const searchResults = await searchInstance.search({
+			messages: [
+				{
+					role: "user",
+					content: latestUserMessage.content,
+				},
+			],
+		});
+
+		/*
+		 * Extract relevant knowledge.
+		 */
+		const knowledge = searchResults.data
+			.map((result: { content?: string }) => result.content || "")
+			.filter(Boolean)
+			.join("\n\n---\n\n");
+
+		/*
+		 * Give the retrieved knowledge to Llama.
+		 */
+		const systemMessage = `${SYSTEM_PROMPT}
+
+Saratam Digiplex knowledge retrieved for this question:
+
+${knowledge || "No relevant knowledge was found."}
+
+Use the retrieved knowledge above when answering the visitor.
+`;
+
+		const chatMessages: ChatMessage[] = messages.filter(
+			(message) => message.role !== "system",
+		);
+
+		chatMessages.unshift({
+			role: "system",
+			content: systemMessage,
+		});
+
 		const inputs = {
-			messages,
+			messages: chatMessages,
 			max_tokens: 1024,
 			stream: true,
 		} satisfies AiTextGenerationInput & { stream: true };
 
-		const stream = await env.AI.run<typeof MODEL_ID>(MODEL_ID, inputs, {
-			// Uncomment to use AI Gateway
-			// gateway: {
-			//   id: "YOUR_GATEWAY_ID", // Replace with your AI Gateway ID
-			//   skipCache: false,      // Set to true to bypass cache
-			//   cacheTtl: 3600,        // Cache time-to-live in seconds
-			// },
-		});
+		const stream = await env.AI.run<typeof MODEL_ID>(
+			MODEL_ID,
+			inputs,
+		);
 
 		return new Response(stream, {
 			headers: {
@@ -109,11 +142,20 @@ async function handleChatRequest(
 		});
 	} catch (error) {
 		console.error("Error processing chat request:", error);
+
 		return new Response(
-			JSON.stringify({ error: "Failed to process request" }),
+			JSON.stringify({
+				error: "Failed to process request",
+			}),
 			{
 				status: 500,
-				headers: { "content-type": "application/json" },
+				headers: {
+					"content-type": "application/json",
+				},
+			},
+		);
+	}
+}
 			},
 		);
 	}
