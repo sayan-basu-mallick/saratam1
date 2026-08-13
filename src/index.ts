@@ -17,7 +17,7 @@ digital marketing, website development, mobile app development, Flutter,
 SEO, advertising, branding and other digital solutions.
 
 IMPORTANT RULES:
-- Use the knowledge provided from the Saratam Digiplex knowledge base.
+- Use the knowledge retrieved from the Saratam Digiplex AI Search knowledge base.
 - Do not invent company information.
 - Do not invent prices, guarantees, clients, awards, statistics or policies.
 - If the knowledge base does not contain the answer to a company-specific
@@ -47,10 +47,14 @@ export default {
 				return handleChatRequest(request, env);
 			}
 
-			return new Response("Method not allowed", { status: 405 });
+			return new Response("Method not allowed", {
+				status: 405,
+			});
 		}
 
-		return new Response("Not found", { status: 404 });
+		return new Response("Not found", {
+			status: 404,
+		});
 	},
 } satisfies ExportedHandler<Env>;
 
@@ -70,20 +74,23 @@ async function handleChatRequest(
 
 		if (!latestUserMessage) {
 			return new Response(
-				JSON.stringify({ error: "No user message provided" }),
+				JSON.stringify({
+					error: "No user message provided",
+				}),
 				{
 					status: 400,
-					headers: { "content-type": "application/json" },
+					headers: {
+						"content-type": "application/json",
+					},
 				},
 			);
 		}
 
-		/*
-		 * Search Saratam Digiplex knowledge base.
-		 */
+		// Get Saratam Digiplex AI Search instance
 		const searchInstance =
 			env.AI_SEARCH.get(AI_SEARCH_INSTANCE);
 
+		// Search the knowledge base
 		const searchResults = await searchInstance.search({
 			messages: [
 				{
@@ -93,17 +100,16 @@ async function handleChatRequest(
 			],
 		});
 
-		/*
-		 * Extract relevant knowledge.
-		 */
+		// Extract retrieved text from AI Search
 		const knowledge = searchResults.chunks
-			.map((result: { content?: string }) => result.content || "")
+			.map(
+				(result: { text?: string }) =>
+					result.text || "",
+			)
 			.filter(Boolean)
 			.join("\n\n---\n\n");
 
-		/*
-		 * Give the retrieved knowledge to Llama.
-		 */
+		// Build system message with retrieved knowledge
 		const systemMessage = `${SYSTEM_PROMPT}
 
 Saratam Digiplex knowledge retrieved for this question:
@@ -113,6 +119,7 @@ ${knowledge || "No relevant knowledge was found."}
 Use the retrieved knowledge above when answering the visitor.
 `;
 
+		// Keep conversation history but remove any old system messages
 		const chatMessages: ChatMessage[] = messages.filter(
 			(message) => message.role !== "system",
 		);
@@ -122,11 +129,14 @@ Use the retrieved knowledge above when answering the visitor.
 			content: systemMessage,
 		});
 
+		// Send knowledge + conversation to Workers AI
 		const inputs = {
 			messages: chatMessages,
 			max_tokens: 1024,
 			stream: true,
-		} satisfies AiTextGenerationInput & { stream: true };
+		} satisfies AiTextGenerationInput & {
+			stream: true;
+		};
 
 		const stream = await env.AI.run<typeof MODEL_ID>(
 			MODEL_ID,
@@ -135,13 +145,17 @@ Use the retrieved knowledge above when answering the visitor.
 
 		return new Response(stream, {
 			headers: {
-				"content-type": "text/event-stream; charset=utf-8",
+				"content-type":
+					"text/event-stream; charset=utf-8",
 				"cache-control": "no-cache",
 				connection: "keep-alive",
 			},
 		});
 	} catch (error) {
-		console.error("Error processing chat request:", error);
+		console.error(
+			"Error processing chat request:",
+			error,
+		);
 
 		return new Response(
 			JSON.stringify({
