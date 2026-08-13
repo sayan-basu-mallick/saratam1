@@ -40,6 +40,8 @@ Besides her business and marketing profession, Kuheli has expertise and strong i
 * Creative arts and artistic expression
 * Writing
 
+Kuheli is also a trained singer and has received vocal training under renowned Indian classical vocalist Pandit Ajoy Chakraborty. Her musical background is an important part of her creative interests alongside her professional work in business, marketing and management.
+
 Her combination of business knowledge, marketing expertise and creative abilities contributes to the broader creative and strategic vision of Saratam Digiplex.
 
 ## Relationship Between Sayan and Kuheli
