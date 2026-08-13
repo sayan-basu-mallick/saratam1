@@ -156,7 +156,3 @@ Use the retrieved knowledge above when answering the visitor.
 		);
 	}
 }
-			},
-		);
-	}
-}
